@@ -7,7 +7,6 @@ const https = require('https');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const musicMetadata = require('music-metadata');
-const NodeID3 = require('node-id3');
 
 app.setName('Audex');
 
@@ -794,20 +793,23 @@ ipcMain.handle('music:writeMetadata', async (event, { filePath, tags }) => {
     return { success: false, error: 'Запись тегов поддерживается только для MP3' };
   }
   try {
+    const { updateFile } = await import('music-metadata-editor');
     const id3Tags = {
       title: tags.title,
       artist: tags.artist,
       album: tags.album,
-      performerInfo: tags.albumArtist || undefined,
+      albumartist: tags.albumArtist || undefined,
       year: tags.year ? String(tags.year) : undefined,
       genre: tags.genre || undefined,
-      trackNumber: tags.trackNo || undefined,
-      partOfSet: tags.discNo || undefined,
-      comment: tags.comment ? { language: 'eng', text: tags.comment } : undefined,
+      native: {
+        ...(tags.trackNo ? { TRCK: String(tags.trackNo) } : {}),
+        ...(tags.discNo ? { TPOS: String(tags.discNo) } : {})
+      },
+      comment: tags.comment ? [{ language: 'eng', text: tags.comment }] : undefined,
     };
     Object.keys(id3Tags).forEach(k => id3Tags[k] === undefined && delete id3Tags[k]);
-    const ok = NodeID3.update(id3Tags, filePath);
-    return { success: !!ok };
+    await updateFile(filePath, id3Tags);
+    return { success: true };
   } catch (err) {
     return { success: false, error: String(err) };
   }
